@@ -1,0 +1,12 @@
+.git/
+.github/
+.venv/
+.vscode/
+__pycache__/
+.pytest_cache/
+tests/
+docs/
+data/
+local.settings.json
+docker-compose.yml
+pyproject.toml

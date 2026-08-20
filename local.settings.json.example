@@ -1,0 +1,14 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "FOUNDRY_PROJECT_ENDPOINT": "",
+    "TRIAGE_AGENT_NAME": "support-triage-agent",
+    "KNOWLEDGE_AGENT_NAME": "support-knowledge-agent",
+    "RISK_AGENT_NAME": "support-risk-reviewer-agent",
+    "DATABASE_PATH": "./data/support_gate.db",
+    "APPROVAL_TIMEOUT_MINUTES": "4320",
+    "DURABLE_TASK_SCHEDULER_CONNECTION_STRING": ""
+  }
+}

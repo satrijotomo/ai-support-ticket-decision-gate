@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.vscode/
+local.settings.json
+data/*
+!data/.gitkeep
+*.db
+*.db-shm
+*.db-wal
+.python_packages/

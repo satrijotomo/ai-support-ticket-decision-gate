@@ -121,3 +121,18 @@ def test_assignment_implementation_stays_in_owned_modules() -> None:
                 violations.append(f"{source.relative_to(ROOT)} defines {node.name}")
 
     assert violations == []
+
+
+def test_sql_statements_stay_in_database_module() -> None:
+    sql_pattern = re.compile(r"\b(?:SELECT|INSERT|UPDATE|DELETE|CREATE TABLE)\b", re.IGNORECASE)
+    violations: list[str] = []
+    for source in python_sources():
+        if source == SQLITE_IMPLEMENTATION:
+            continue
+        tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if sql_pattern.search(node.value):
+                    violations.append(str(source.relative_to(ROOT)))
+
+    assert violations == []

@@ -47,8 +47,14 @@ CREATE TABLE IF NOT EXISTS AuditEvents (
     occurred_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS DemoControls (
+    control_name TEXT PRIMARY KEY,
+    armed INTEGER NOT NULL CHECK(armed IN (0, 1))
+);
+
 CREATE INDEX IF NOT EXISTS IX_Tickets_Status ON Tickets(status);
 CREATE INDEX IF NOT EXISTS IX_AgentResults_TicketId ON AgentResults(ticket_id);
 CREATE INDEX IF NOT EXISTS IX_Approvals_TicketId ON Approvals(ticket_id);
+CREATE UNIQUE INDEX IF NOT EXISTS UX_Approvals_TicketId ON Approvals(ticket_id);
 CREATE INDEX IF NOT EXISTS IX_AuditEvents_TicketId_OccurredAt
     ON AuditEvents(ticket_id, occurred_at);

@@ -112,6 +112,12 @@ class DecisionRequest(StrictModel):
     comments: str = ""
 
 
+class AssignmentRequest(StrictModel):
+    ticket_id: NonEmptyString
+    action_id: NonEmptyString
+    assigned_team: TriageAgentResult.__annotations__["recommended_team"]
+
+
 class ErrorResponse(StrictModel):
     error: NonEmptyString
     details: dict[str, Any] | None = None

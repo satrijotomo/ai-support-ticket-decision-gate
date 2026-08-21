@@ -60,12 +60,14 @@ def test_settings_load_valid_environment_values() -> None:
     settings = AppSettings.from_environment(
         {
             "FOUNDRY_PROJECT_ENDPOINT": "https://example.services.ai.azure.com/api/projects/demo",
+            "FOUNDRY_MOCK_MODE": "false",
             "APPROVAL_TIMEOUT_MINUTES": "60",
             "DATABASE_PATH": "./data/test.db",
         }
     )
 
     assert str(settings.foundry_project_endpoint).startswith("https://example.")
+    assert settings.foundry_mock_mode is False
     assert settings.approval_timeout_minutes == 60
     assert settings.database_path == "./data/test.db"
 
@@ -74,6 +76,7 @@ def test_settings_allow_phase_one_without_foundry_resources() -> None:
     settings = AppSettings.from_environment({})
 
     assert settings.foundry_project_endpoint is None
+    assert settings.foundry_mock_mode is True
     assert settings.triage_agent_name == "support-triage-agent"
 
 

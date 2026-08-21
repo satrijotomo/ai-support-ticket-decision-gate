@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import azure.durable_functions as df
 
 
@@ -19,7 +21,7 @@ def orchestrator_logic(context: df.DurableOrchestrationContext):
 
     agent_tasks = [
         context.call_activity(
-            "RunMockAgentActivity",
+            "RunFoundryAgentActivity",
             {
                 "ticket_id": ticket_id,
                 "agent_name": agent_name,
@@ -38,7 +40,22 @@ def orchestrator_logic(context: df.DurableOrchestrationContext):
     )
     context.set_custom_status("PendingApproval")
 
-    decision_payload = yield context.wait_for_external_event("ApprovalDecision")
+    approval_task = context.wait_for_external_event("ApprovalDecision")
+    timeout_at = context.current_utc_datetime + timedelta(
+        minutes=workflow_input["approval_timeout_minutes"]
+    )
+    timeout_task = context.create_timer(timeout_at)
+    winner = yield context.task_any([approval_task, timeout_task])
+    if winner == timeout_task:
+        yield context.call_activity(
+            "PersistApprovalTimeoutActivity",
+            {"ticket_id": ticket_id, "timeout_at": timeout_at.isoformat()},
+        )
+        context.set_custom_status("ApprovalTimedOut")
+        return {"ticket_id": ticket_id, "status": "ApprovalTimedOut"}
+
+    timeout_task.cancel()
+    decision_payload = approval_task.result
     decision = yield context.call_activity(
         "RecordApprovalActivity",
         {"ticket_id": ticket_id, "decision": decision_payload},
@@ -49,6 +66,27 @@ def orchestrator_logic(context: df.DurableOrchestrationContext):
         {"ticket_id": ticket_id, "status": terminal_status},
     )
     context.set_custom_status(terminal_status)
+
+    if terminal_status == "Approved":
+        retry_options = df.RetryOptions(
+            first_retry_interval_in_milliseconds=5_000,
+            max_number_of_attempts=3,
+        )
+        yield context.call_activity_with_retry(
+            "ExecuteAssignmentActivity",
+            retry_options,
+            {
+                "ticket_id": ticket_id,
+                "action_id": f"assign:{ticket_id}",
+                "assigned_team": recommendation["recommended_team"],
+            },
+        )
+        yield context.call_activity(
+            "FinalizeDecisionActivity",
+            {"ticket_id": ticket_id, "status": "Completed"},
+        )
+        context.set_custom_status("Completed")
+        terminal_status = "Completed"
 
     return {"ticket_id": ticket_id, "status": terminal_status}
 

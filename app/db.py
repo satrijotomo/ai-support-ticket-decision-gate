@@ -195,17 +195,22 @@ def record_approval(
                 :approval_id, :decision_id, :ticket_id, :approver,
                 :decision, :comments, :decided_at
             )
-            ON CONFLICT(decision_id) DO NOTHING
+            ON CONFLICT DO NOTHING
             """,
             values,
         )
         row = connection.execute(
-            "SELECT * FROM Approvals WHERE decision_id = ?",
-            (approval.decision_id,),
+            "SELECT * FROM Approvals WHERE ticket_id = ?",
+            (approval.ticket_id,),
         ).fetchone()
     if row is None:
         raise RuntimeError("approval insert did not produce a row")
-    return ApprovalRecord.model_validate(dict(row))
+    stored = ApprovalRecord.model_validate(dict(row))
+    if stored.decision_id != approval.decision_id:
+        raise IdempotencyConflictError(
+            f"ticket {approval.ticket_id} already has an approval decision"
+        )
+    return stored
 
 
 def get_approval(
@@ -302,3 +307,30 @@ def record_assignment(
     if stored is None:
         raise RuntimeError("assignment update did not produce a row")
     return stored
+
+
+def set_demo_control(
+    database_path: str | Path, control_name: str, *, armed: bool
+) -> None:
+    with database_connection(database_path) as connection, connection:
+        connection.execute(
+            """
+            INSERT INTO DemoControls (control_name, armed)
+            VALUES (?, ?)
+            ON CONFLICT(control_name) DO UPDATE SET armed = excluded.armed
+            """,
+            (control_name, int(armed)),
+        )
+
+
+def consume_demo_control(database_path: str | Path, control_name: str) -> bool:
+    with database_connection(database_path) as connection, connection:
+        cursor = connection.execute(
+            """
+            UPDATE DemoControls
+            SET armed = 0
+            WHERE control_name = ? AND armed = 1
+            """,
+            (control_name,),
+        )
+    return cursor.rowcount == 1

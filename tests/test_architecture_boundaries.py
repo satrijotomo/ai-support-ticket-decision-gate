@@ -7,7 +7,11 @@ ROOT = Path(__file__).parents[1]
 APP_ROOT = ROOT / "app"
 
 SQLITE_IMPLEMENTATION = APP_ROOT / "db.py"
-SQLITE_CONSUMERS = {APP_ROOT / "activities_blueprint.py", APP_ROOT / "api_blueprint.py"}
+SQLITE_CONSUMERS = {
+    APP_ROOT / "activities_blueprint.py",
+    APP_ROOT / "api_blueprint.py",
+    APP_ROOT / "demo_controls.py",
+}
 FOUNDRY_OWNERS = {APP_ROOT / "activities_blueprint.py", APP_ROOT / "foundry_client.py"}
 ORCHESTRATOR = APP_ROOT / "durable_blueprint.py"
 
@@ -94,6 +98,17 @@ def test_foundry_adapter_cannot_import_persistence() -> None:
     assert "sqlite3" not in imported_modules(adapter)
 
 
+def test_foundry_adapter_is_imported_only_by_activities() -> None:
+    violations: list[str] = []
+    for source in python_sources():
+        if source == APP_ROOT / "activities_blueprint.py":
+            continue
+        if "app.foundry_client" in imported_modules(source):
+            violations.append(str(source.relative_to(ROOT)))
+
+    assert violations == []
+
+
 def test_ui_javascript_cannot_bypass_http_api() -> None:
     forbidden_tokens = re.compile(
         r"\b(?:indexedDB|localStorage|openDatabase|sqlite3?|AIProjectClient|DurableTask)\b"
@@ -108,7 +123,12 @@ def test_ui_javascript_cannot_bypass_http_api() -> None:
 
 
 def test_assignment_implementation_stays_in_owned_modules() -> None:
-    allowed = {APP_ROOT / "activities_blueprint.py", APP_ROOT / "db.py"}
+    allowed = {
+        APP_ROOT / "activities_blueprint.py",
+        APP_ROOT / "api_blueprint.py",
+        APP_ROOT / "db.py",
+        APP_ROOT / "demo_controls.py",
+    }
     violations: list[str] = []
     for source in python_sources():
         if source in allowed:
@@ -139,7 +159,7 @@ def test_sql_statements_stay_in_database_module() -> None:
 
 
 def test_orchestrator_has_exact_import_allowlist() -> None:
-    assert imported_modules(ORCHESTRATOR) == {"azure.durable_functions"}
+    assert imported_modules(ORCHESTRATOR) == {"azure.durable_functions", "datetime"}
 
 
 def test_orchestrator_uses_only_durable_coordination_methods() -> None:
@@ -170,11 +190,12 @@ def test_orchestrator_invokes_activities_only_by_name() -> None:
     tree = ast.parse(ORCHESTRATOR.read_text(encoding="utf-8"))
     forbidden_direct_calls = {
         "create_ticket_activity",
-        "run_mock_agent_activity",
+        "run_foundry_agent_activity",
         "build_recommendation_activity",
         "save_pending_approval_activity",
         "record_approval_activity",
         "finalize_decision_activity",
+        "execute_assignment_activity",
     }
     called_names = {
         node.func.id

@@ -9,6 +9,7 @@ from app.db import (
     BUSY_TIMEOUT_MILLISECONDS,
     IdempotencyConflictError,
     append_audit_event,
+    consume_demo_control,
     database_connection,
     get_approval,
     get_ticket,
@@ -17,6 +18,7 @@ from app.db import (
     list_audit_events,
     record_approval,
     record_assignment,
+    set_demo_control,
     update_ticket_status,
     upsert_agent_result,
     upsert_ticket,
@@ -52,11 +54,18 @@ def test_schema_initialization_is_repeatable_and_exact(database_path: Path) -> N
         busy_timeout = connection.execute("PRAGMA busy_timeout").fetchone()[0]
         foreign_keys = connection.execute("PRAGMA foreign_keys").fetchone()[0]
 
-    assert tables == {"Tickets", "AgentResults", "Approvals", "AuditEvents"}
+    assert tables == {
+        "Tickets",
+        "AgentResults",
+        "Approvals",
+        "AuditEvents",
+        "DemoControls",
+    }
     assert {
         "IX_Tickets_Status",
         "IX_AgentResults_TicketId",
         "IX_Approvals_TicketId",
+        "UX_Approvals_TicketId",
         "IX_AuditEvents_TicketId_OccurredAt",
     } <= indexes
     assert journal_mode == "wal"
@@ -141,6 +150,35 @@ def test_duplicate_approval_returns_original_record(
     assert get_approval(database_path, ticket.ticket_id) == original
 
 
+def test_second_approval_for_ticket_is_rejected(
+    database_path: Path, ticket: TicketRecord
+) -> None:
+    upsert_ticket(database_path, ticket)
+    original = ApprovalRecord(
+        approval_id="approval-1",
+        decision_id="decision-1",
+        ticket_id=ticket.ticket_id,
+        approver="Bambang",
+        decision="approve",
+        decided_at=NOW,
+    )
+    record_approval(database_path, original)
+
+    with pytest.raises(IdempotencyConflictError):
+        record_approval(
+            database_path,
+            original.model_copy(
+                update={
+                    "approval_id": "approval-2",
+                    "decision_id": "decision-2",
+                    "decision": "reject",
+                }
+            ),
+        )
+
+    assert get_approval(database_path, ticket.ticket_id) == original
+
+
 def test_audit_event_deduplicates_and_orders_events(
     database_path: Path, ticket: TicketRecord
 ) -> None:
@@ -218,6 +256,25 @@ def test_assignment_action_is_idempotent_and_conflicts_are_rejected(
             "ServiceDesk",
             NOW,
         )
+
+
+def test_demo_control_is_consumed_exactly_once_under_concurrency(
+    database_path: Path,
+) -> None:
+    set_demo_control(database_path, "fail-next-assignment", armed=True)
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        consumed = list(
+            executor.map(
+                lambda _: consume_demo_control(
+                    database_path, "fail-next-assignment"
+                ),
+                range(4),
+            )
+        )
+
+    assert consumed.count(True) == 1
+    assert consumed.count(False) == 3
 
 
 def test_foreign_key_failure_rolls_back(database_path: Path) -> None:

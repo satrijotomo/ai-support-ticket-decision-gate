@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    (() => {
+      const param = new URLSearchParams(window.location.search).get("scoutTheme");
+      const theme =
+        param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+  <title>AI Support Ticket Decision Gate</title>
+  <link rel="stylesheet" href="/api/ui/styles.css">
+  <script src="/api/ui/app.js" defer></script>
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">Operations console</p>
+      <h1>AI Support Ticket Decision Gate</h1>
+    </div>
+    <div class="header-actions">
+      <span id="connection-status" class="connection-status" role="status">Connecting</span>
+      <button id="fail-next-button" class="button button-secondary" type="button">Fail next assignment</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="ticket-rail" aria-label="Support tickets">
+      <section class="create-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">New request</p>
+            <h2>Create support ticket</h2>
+          </div>
+          <button id="toggle-form-button" class="icon-button" type="button" aria-expanded="true" aria-controls="ticket-form" title="Toggle ticket form">−</button>
+        </div>
+        <form id="ticket-form" novalidate>
+          <label>Title <span aria-hidden="true">*</span>
+            <input name="title" required maxlength="160" autocomplete="off">
+          </label>
+          <label>Description <span aria-hidden="true">*</span>
+            <textarea name="description" required rows="4"></textarea>
+          </label>
+          <div class="form-grid">
+            <label>Affected service
+              <input name="affected_service" autocomplete="off">
+            </label>
+            <label>Submitted by
+              <input name="submitted_by" autocomplete="email">
+            </label>
+          </div>
+          <label>Customer impact
+            <textarea name="customer_impact" rows="2"></textarea>
+          </label>
+          <div id="form-message" class="form-message" role="status" aria-live="polite"></div>
+          <button id="submit-button" class="button button-primary" type="submit">Submit ticket</button>
+        </form>
+      </section>
+
+      <section class="ticket-list-panel">
+        <div class="section-heading list-heading">
+          <div>
+            <p class="eyebrow">Queue</p>
+            <h2>Tickets <span id="ticket-count" class="count">0</span></h2>
+          </div>
+          <button id="refresh-button" class="icon-button" type="button" title="Refresh tickets" aria-label="Refresh tickets">↻</button>
+        </div>
+        <div id="ticket-list" class="ticket-list" aria-live="polite"></div>
+      </section>
+    </aside>
+
+    <section id="detail-pane" class="detail-pane" aria-live="polite">
+      <div id="empty-state" class="empty-state">
+        <p class="eyebrow">Decision workspace</p>
+        <h2>Select a ticket</h2>
+        <p>Choose a ticket from the queue to inspect agent analysis, recommendation, approval state, and audit history.</p>
+      </div>
+
+      <div id="detail-content" hidden>
+        <header class="ticket-header">
+          <div>
+            <div class="ticket-kicker">
+              <span id="detail-status" class="status-badge"></span>
+              <span id="poll-indicator" class="poll-indicator" hidden>Live</span>
+            </div>
+            <h2 id="detail-title"></h2>
+            <p id="detail-description" class="detail-description"></p>
+          </div>
+          <dl id="ticket-metadata" class="metadata"></dl>
+        </header>
+
+        <div id="detail-error" class="notice notice-error" role="alert" hidden></div>
+
+        <section class="content-section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Parallel analysis</p>
+              <h3>Agent results</h3>
+            </div>
+            <span class="section-note">Triage · Knowledge · Risk</span>
+          </div>
+          <div id="agent-results" class="agent-grid"></div>
+        </section>
+
+        <section class="content-section recommendation-section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Consolidated output</p>
+              <h3>Recommendation</h3>
+            </div>
+          </div>
+          <div id="recommendation"></div>
+        </section>
+
+        <section id="approval-section" class="content-section approval-section" hidden>
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Human gate</p>
+              <h3>Decision required</h3>
+            </div>
+          </div>
+          <form id="decision-form" novalidate>
+            <div class="form-grid">
+              <label>Approver <span aria-hidden="true">*</span>
+                <input name="approver" required autocomplete="name">
+              </label>
+              <label>Comments
+                <input name="comments" autocomplete="off">
+              </label>
+            </div>
+            <div id="decision-message" class="form-message" role="status" aria-live="polite"></div>
+            <div class="decision-actions">
+              <button class="button button-danger" type="button" data-decision="reject">Reject</button>
+              <button class="button button-primary" type="button" data-decision="approve">Approve</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="content-section audit-section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Immutable history</p>
+              <h3>Audit timeline</h3>
+            </div>
+          </div>
+          <ol id="audit-timeline" class="timeline"></ol>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>

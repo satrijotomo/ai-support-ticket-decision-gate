@@ -9,6 +9,7 @@ APP_ROOT = ROOT / "app"
 SQLITE_IMPLEMENTATION = APP_ROOT / "db.py"
 SQLITE_CONSUMERS = {APP_ROOT / "activities_blueprint.py", APP_ROOT / "api_blueprint.py"}
 FOUNDRY_OWNERS = {APP_ROOT / "activities_blueprint.py", APP_ROOT / "foundry_client.py"}
+ORCHESTRATOR = APP_ROOT / "durable_blueprint.py"
 
 
 def python_sources() -> list[Path]:
@@ -27,8 +28,7 @@ def imported_modules(source: Path) -> set[str]:
 
 
 def test_future_orchestrator_is_coordination_only() -> None:
-    orchestrator = APP_ROOT / "durable_blueprint.py"
-    if not orchestrator.exists():
+    if not ORCHESTRATOR.exists():
         return
 
     forbidden_roots = {
@@ -47,7 +47,7 @@ def test_future_orchestrator_is_coordination_only() -> None:
         "urllib",
         "uuid",
     }
-    imports = imported_modules(orchestrator)
+    imports = imported_modules(ORCHESTRATOR)
 
     violations = sorted(
         module
@@ -136,3 +136,50 @@ def test_sql_statements_stay_in_database_module() -> None:
                     violations.append(str(source.relative_to(ROOT)))
 
     assert violations == []
+
+
+def test_orchestrator_has_exact_import_allowlist() -> None:
+    assert imported_modules(ORCHESTRATOR) == {"azure.durable_functions"}
+
+
+def test_orchestrator_uses_only_durable_coordination_methods() -> None:
+    approved_context_methods = {
+        "call_activity",
+        "call_activity_with_retry",
+        "create_timer",
+        "get_input",
+        "set_custom_status",
+        "task_all",
+        "task_any",
+        "wait_for_external_event",
+    }
+    tree = ast.parse(ORCHESTRATOR.read_text(encoding="utf-8"))
+    context_calls = {
+        node.func.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "context"
+    }
+
+    assert context_calls <= approved_context_methods
+
+
+def test_orchestrator_invokes_activities_only_by_name() -> None:
+    tree = ast.parse(ORCHESTRATOR.read_text(encoding="utf-8"))
+    forbidden_direct_calls = {
+        "create_ticket_activity",
+        "run_mock_agent_activity",
+        "build_recommendation_activity",
+        "save_pending_approval_activity",
+        "record_approval_activity",
+        "finalize_decision_activity",
+    }
+    called_names = {
+        node.func.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+
+    assert called_names.isdisjoint(forbidden_direct_calls)
